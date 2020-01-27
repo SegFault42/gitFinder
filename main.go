@@ -1,10 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -40,10 +40,28 @@ func getUrls(doc *goquery.Document) []string {
 	return (foundUrls)
 }
 
-func main() {
-	url := "https://serveur-prive.net/minecraft/page/"
-	var serverList []string
+func getVulnServer(serverList []string) {
+	for _, link := range serverList {
+		link = "http://" + link + "/.git/index"
 
+		client := http.Client{
+			Timeout: 2 * time.Second,
+		}
+		resp, _ := client.Get(link)
+
+		if resp != nil && resp.StatusCode == 200 {
+			log.Printf("\033[32m%s\033[0m", link)
+		} else {
+			log.Printf("\033[31m%s\033[0m", link)
+		}
+	}
+}
+
+func main() {
+	url := "https://serveur-prive.net/ark-survival-evolved/page/"
+	//var serverList []string
+
+	// get all server list
 	for i := 1; ; i++ {
 		newUrl := url + strconv.Itoa(i)
 		doc := dumpPage(newUrl)
@@ -51,10 +69,8 @@ func main() {
 		if len(lstUrl) == 0 {
 			break
 		}
-		serverList = append(serverList, lstUrl...)
+		getVulnServer(lstUrl)
+		//serverList = append(serverList, lstUrl...)
 	}
 
-	for nb, elem := range serverList {
-		fmt.Printf("%d : %s\n", nb, elem)
-	}
 }
