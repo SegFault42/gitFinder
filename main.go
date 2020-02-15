@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bufio"
+	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
-	"strconv"
-	"time"
+	"os"
+	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -40,37 +43,62 @@ func getUrls(doc *goquery.Document) []string {
 	return (foundUrls)
 }
 
-func getVulnServer(serverList []string) {
-	for _, link := range serverList {
-		link = "http://" + link + "/.git/index"
+func request(url string) int {
 
-		client := http.Client{
-			Timeout: 2 * time.Second,
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return -1
+	}
+	resp, err := http.DefaultTransport.RoundTrip(req)
+	if err != nil {
+		return -1
+	}
+
+	if resp.StatusCode == 200 {
+		htmlData, err := ioutil.ReadAll(resp.Body) //<--- here!
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
 		}
-		resp, _ := client.Get(link)
+		if !strings.HasPrefix(string(htmlData), "[core]\n") {
+			return -1
+		}
+	}
+	return resp.StatusCode
+}
 
-		if resp != nil && resp.StatusCode == 200 {
-			log.Printf("\033[32m%s\033[0m", link)
+func getVulnServer(server string) {
+	tab := [...]string{"http://", "https://", "http://www.", "https://www."}
+
+	for _, elem := range tab {
+		endpoint := elem + server + "/.git/config"
+		if request(endpoint) != 200 {
+			l := log.New(os.Stderr, "", 0)
+			l.Printf("\033[31m%s\033[0m", endpoint)
 		} else {
-			log.Printf("\033[31m%s\033[0m", link)
+			log.Printf("\033[32m%s\033[0m", endpoint)
+			fmt.Printf("%s\n", endpoint)
+			break
 		}
 	}
 }
 
 func main() {
-	url := "https://serveur-prive.net/ark-survival-evolved/page/"
-	//var serverList []string
+	if len(os.Args) != 2 {
+		fmt.Println("Usage : ./prog file_list")
+	}
+	file, err := os.Open(os.Args[1])
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
 
-	// get all server list
-	for i := 1; ; i++ {
-		newUrl := url + strconv.Itoa(i)
-		doc := dumpPage(newUrl)
-		lstUrl := getUrls(doc)
-		if len(lstUrl) == 0 {
-			break
-		}
-		getVulnServer(lstUrl)
-		//serverList = append(serverList, lstUrl...)
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		getVulnServer(scanner.Text())
 	}
 
+	if err := scanner.Err(); err != nil {
+		log.Fatal(err)
+	}
 }
